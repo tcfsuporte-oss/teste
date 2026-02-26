@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>WebGL Chaos Mode 🔥</title>
+<title>Memory Leak Mode 💀</title>
 <style>
 body {
     margin: 0;
@@ -14,10 +14,10 @@ body {
     position: fixed;
     top: 10px;
     left: 10px;
-    color: #00ffcc;
+    color: #00ff00;
     background: rgba(0,0,0,0.7);
     padding: 10px;
-    border: 1px solid #00ffcc;
+    border: 1px solid #00ff00;
 }
 canvas {
     display: block;
@@ -29,7 +29,7 @@ canvas {
 <div id="stats">
 FPS: <span id="fps">0</span><br>
 Memória: <span id="mem">0</span> MB<br>
-Partículas: <span id="count">0</span>
+Objetos: <span id="count">0</span>
 </div>
 
 <canvas id="canvas"></canvas>
@@ -42,15 +42,19 @@ canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 let particles = [];
+let junkMemory = []; // 💀 vazamento proposital
 
 let ball = {
-    x: canvas.width / 2,
-    y: canvas.height / 2,
-    radius: 10,
-    speed: 5,
-    dx: 5,
-    dy: 5
+    x: canvas.width/2,
+    y: canvas.height/2,
+    dx: 4,
+    dy: 4,
+    speed: 4,
+    radius: 10
 };
+
+let lastTime = performance.now();
+let startTime = performance.now();
 
 function randomDirection(speed) {
     let angle = Math.random() * Math.PI * 2;
@@ -60,31 +64,27 @@ function randomDirection(speed) {
     };
 }
 
-function createExplosion(x, y) {
-    for (let i = 0; i < 3000; i++) { // pesado 😈
+function createExplosion(x, y, amount) {
+    for (let i = 0; i < amount; i++) {
         particles.push({
             x: x,
             y: y,
-            dx: (Math.random() - 0.5) * 8,
-            dy: (Math.random() - 0.5) * 8,
-            life: 200,
-            size: Math.random() * 3,
-            hue: Math.random() * 360
+            dx: (Math.random()-0.5)*10,
+            dy: (Math.random()-0.5)*10,
+            size: Math.random()*3,
+            hue: Math.random()*360
+            // 💀 SEM LIFE → nunca removemos
         });
     }
 }
 
-let lastTime = performance.now();
-
 function update() {
 
-    // FPS
     let now = performance.now();
     let fps = Math.round(1000 / (now - lastTime));
     lastTime = now;
     document.getElementById("fps").innerText = fps;
 
-    // Memória (Chrome)
     if (performance.memory) {
         let mem = performance.memory.usedJSHeapSize / 1048576;
         document.getElementById("mem").innerText = mem.toFixed(2);
@@ -92,9 +92,8 @@ function update() {
         document.getElementById("mem").innerText = "N/A";
     }
 
-    // Fundo com fade (rastro neon)
-    ctx.fillStyle = "rgba(0,0,0,0.15)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "rgba(0,0,0,0.1)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
 
     ball.x += ball.dx;
     ball.y += ball.dy;
@@ -104,39 +103,44 @@ function update() {
     if (ball.x <= 0 || ball.x >= canvas.width) collided = true;
     if (ball.y <= 0 || ball.y >= canvas.height) collided = true;
 
+    let elapsed = (now - startTime) / 1000;
+
     if (collided) {
-        ball.speed += 0.7;
+        ball.speed += 0.5;
         let dir = randomDirection(ball.speed);
         ball.dx = dir.dx;
         ball.dy = dir.dy;
-        createExplosion(ball.x, ball.y);
+
+        // 🔥 começa leve...
+        let amount = 100 + Math.floor(elapsed * 200);
+
+        createExplosion(ball.x, ball.y, amount);
+
+        // 💀 MEMORY LEAK INTENCIONAL
+        junkMemory.push(new Array(999999).fill(Math.random()));
     }
 
-    // desenhar bola neon
     ctx.beginPath();
-    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-    ctx.fillStyle = `hsl(${Date.now()/5 % 360},100%,50%)`;
-    ctx.shadowBlur = 40;
+    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
+    ctx.fillStyle = `hsl(${Date.now()/5%360},100%,50%)`;
+    ctx.shadowBlur = 30;
     ctx.shadowColor = ctx.fillStyle;
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // partículas
     for (let i = 0; i < particles.length; i++) {
         let p = particles[i];
         p.x += p.dx;
         p.y += p.dy;
-        p.life--;
 
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
         ctx.fillStyle = `hsl(${p.hue},100%,50%)`;
         ctx.fill();
     }
 
-    particles = particles.filter(p => p.life > 0);
-
-    document.getElementById("count").innerText = particles.length;
+    document.getElementById("count").innerText =
+        particles.length + junkMemory.length;
 
     requestAnimationFrame(update);
 }
